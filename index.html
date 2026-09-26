@@ -5,19 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>電車連結ひも伸び縮みシミュレーター</title>
     <style>
+        /* テーマ別の全体背景色（枠内の色は変えず、外側の余白背景のみ変更） */
+        :root {
+            --outer-bg: #2b2b2b; /* デフォルト（ダークモード）：外側の余白グレー */
+            --text-color: #f0f2f5;
+            --toggle-bg: #444;
+            --toggle-color: #fff;
+        }
+
+        body.light-mode {
+            --outer-bg: #dcdcdc; /* ライトモード：外側の余白グレー */
+            --text-color: #333;
+            --toggle-bg: #fff;
+            --toggle-color: #333;
+        }
+
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f0f2f5;
+            background-color: var(--outer-bg);
             margin: 0;
             padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            color: #333;
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+            position: relative;
         }
+
+        /* 右上のダークモード切り替えボタン */
+        .theme-toggle {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: var(--toggle-bg);
+            border: 1px solid #bdc3c7;
+            color: var(--toggle-color);
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: background 0.2s, transform 0.1s;
+        }
+        .theme-toggle:hover {
+            transform: scale(1.05);
+        }
+
         h1 {
             margin-bottom: 10px;
-            color: #2c3e50;
+            color: var(--text-color);
             font-size: 24px;
         }
         .description {
@@ -27,13 +64,13 @@
             line-height: 1.5;
             color: #555;
             margin-bottom: 20px;
-            background: #fff;
+            background: #fff; /* 元の白背景 */
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         .controls {
-            background-color: #fff;
+            background-color: #fff; /* 元の白背景 */
             padding: 15px 25px;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -98,7 +135,7 @@
         .btn-danger:hover { background-color: #c0392b; }
         
         .canvas-container {
-            background: white;
+            background: white; /* 元の白背景 */
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             overflow: hidden;
@@ -113,12 +150,16 @@
             gap: 15px;
             font-size: 12px;
             margin-bottom: 10px;
+            color: var(--text-color);
         }
         .legend-item { display: flex; align-items: center; gap: 5px; }
         .legend-color { width: 12px; height: 12px; border-radius: 2px; }
     </style>
 </head>
 <body>
+
+    <!-- 右上切り替えボタン -->
+    <button class="theme-toggle" id="themeToggle">☀️ ライトモード</button>
 
     <h1>電車連結ひも伸び縮み物理シミュレーター</h1>
     
@@ -180,6 +221,14 @@
         const canvas = document.getElementById('simCanvas');
         const ctx = canvas.getContext('2d');
 
+        // テーマ切り替え処理
+        const themeToggleBtn = document.getElementById('themeToggle');
+        themeToggleBtn.addEventListener('click', () => {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            themeToggleBtn.textContent = isLight ? '🌙 ダークモード' : '☀️ ライトモード';
+        });
+
         // シミュレーション設定
         const numTrains = 6;
         const trainWidth = 50;
@@ -226,7 +275,7 @@
             ctx.fill();
         }
 
-        // 中景の湖（視差係数は中程度、一定間隔で断続的に出現）
+        // 中景の湖（視差係수는中程度、一定間隔で断続的に出現）
         function drawLakes(parallax) {
             const offset = cameraX * parallax;
             const period = 900;
