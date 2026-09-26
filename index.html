@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電車連結ひも伸び縮みシミュレーター</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #333;
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+            font-size: 24px;
+        }
+        .description {
+            max-width: 800px;
+            text-align: left;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #555;
+            margin-bottom: 20px;
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .controls {
+            background-color: #fff;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+            max-width: 800px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 5px;
+        }
+        label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #7f8c8d;
+        }
+        select, input[type="range"] {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #bdc3c7;
+            font-size: 14px;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-top: 5px;
+        }
+        .checkbox-group input {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary { background-color: #3498db; color: white; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-danger { background-color: #e74c3c; color: white; }
+        .btn-danger:hover { background-color: #c0392b; }
+        
+        .canvas-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        canvas {
+            display: block;
+            background-color: #fafafa;
+        }
+        .legend {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-color { width: 12px; height: 12px; border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+    <h1>電車連結ひも伸び縮み物理シミュレーター</h1>
+    
+    <div class="description">
+        <strong>【遊び方・物理仕様】</strong><br>
+        6台の車両がそれぞれ<strong>質量（慣性）</strong>を持ち、間が<strong>伸縮するひも（バネ・ダンパモデル）</strong>で連結されています[cite: 1]。<br>
+        「行き止まり壁」を解除すると壁がなくなり、電車がどこまでも走り続けます[cite: 1]。カメラが自動で電車を追従します[cite: 1]。<br>
+        ひもの色が変化します：<span style="color:#e74c3c;font-weight:bold;">赤（伸びて緊張・引っ張り状態）</span> / <span style="color:#3498db;font-weight:bold;">青（縮んで弛緩・押し状態）</span> / 緑（自然長）[cite: 1]。
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="motorIndex">駆動車の位置</label>
+            <select id="motorIndex">
+                <option value="0">1台目（先頭）</option>
+                <option value="1">2台目</option>
+                <option value="2">3台目</option>
+                <option value="3">4台目</option>
+                <option value="4">5台目</option>
+                <option value="5">6台目（最後尾）</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="ropeElasticity">ひもの柔らかさ（バネ定数）</label>
+            <input type="range" id="ropeElasticity" min="0.1" max="1.5" step="0.1" value="0.4">
+        </div>
+
+        <div class="control-group">
+            <label for="drivingForce">駆動パワー</label>
+            <input type="range" id="drivingForce" min="0.2" max="1.5" step="0.1" value="0.6">
+        </div>
+
+        <div class="control-group" style="justify-content: flex-end;">
+            <label class="checkbox-group">
+                <input type="checkbox" id="chkWall" checked> 行き止まり壁あり
+            </label>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-primary" id="btnForward">前進アクセル</button>
+            <button class="btn-danger" id="btnBackward">後退アクセル</button>
+            <button style="background-color:#95a5a6; color:white;" id="btnReset">リセット</button>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="legend-color" style="background:#e74c3c;"></div>ひも：伸び（緊張・引張力）</div>
+        <div class="legend-item"><div class="legend-color" style="background:#2ecc71;"></div>ひも：自然長付近</div>
+        <div class="legend-item"><div class="legend-color" style="background:#3498db;"></div>ひも：縮み（弛緩・圧縮力）</div>
+        <div class="legend-item"><div class="legend-color" style="background:#f1c40f;"></div>車両：駆動車</div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="simCanvas" width="850" height="250"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // シミュレーション設定
+        const numTrains = 6;
+        const trainWidth = 50;
+        const trainHeight = 30;
+        const restLength = 60; // ひもの自然長
+        const friction = 0.96; // 空気・走行抵抗
+        const damping = 0.5; // ひもの減衰（バタつき防止）
+
+        let trains = [];
+        let ropes = [];
+        let motorIndex = 0;
+        let activeForce = 0; // 現在かかっている駆動入力
+        let useWall = true;
+        let cameraX = 0; // カメラのスクロール位置
+
+        // ===== 背景（多重スクロール）関連 =====
+        function pseudoRandom(seed) {
+            const x = Math.sin(seed * 12.9898) * 43758.5453;
+            return x - Math.floor(x);
+        }
+
+        function drawSky() {
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#8ec9f0');
+            grad.addColorStop(0.55, '#cfeaf7');
+            grad.addColorStop(1, '#eef8f0');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 遠景の山（視差係数が小さいほどゆっくり動く＝奥にあるように見える）
+        function drawMountainRange(parallax, baseY, amp1, amp2, freq1, freq2, color) {
+            const offset = cameraX * parallax;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            for (let x = 0; x <= canvas.width; x += 8) {
+                const wx = x + offset;
+                const y = baseY - amp1 * Math.sin(wx * freq1) - amp2 * Math.sin(wx * freq2 + 1.7);
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // 中景の湖（視差係数は中程度、一定間隔で断続的に出現）
+        function drawLakes(parallax) {
+            const offset = cameraX * parallax;
+            const period = 900;
+            const baseY = 150;
+            const startIndex = Math.floor((offset - period) / period);
+            const endIndex = Math.ceil((offset + canvas.width + period) / period);
+            for (let i = startIndex; i <= endIndex; i++) {
+                if (pseudoRandom(i * 7.3) < 0.5) continue; // 湖なし区間
+                const worldCenterX = i * period + period * 0.5;
+                const screenX = worldCenterX - offset;
+                const lakeWidth = 160 + pseudoRandom(i * 3.1) * 110;
+                const lakeHeight = 16 + pseudoRandom(i * 5.9) * 8;
+
+                const grad = ctx.createLinearGradient(0, baseY - lakeHeight, 0, baseY + lakeHeight);
+                grad.addColorStop(0, '#bfe3f5');
+                grad.addColorStop(1, '#5fa8d3');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.ellipse(screenX, baseY, lakeWidth / 2, lakeHeight / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+                ctx.lineWidth = 1;
+                for (let w = -1; w <= 1; w++) {
+                    ctx.beginPath();
+                    ctx.ellipse(screenX, baseY + w * 5, Math.max(lakeWidth / 2 - 18, 5), 2.5, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // 近景の木立（視差係数が大きい＝手前にあるように見える）
+        function drawTrees(parallax) {
+            const offset = cameraX * parallax;
+            const period = 55;
+            const groundY = 162;
+            const startIndex = Math.floor((offset - period) / period);
+            const endIndex = Math.ceil((offset + canvas.width + period) / period);
+            for (let i = startIndex; i <= endIndex; i++) {
+                const worldX = i * period + pseudoRandom(i * 2.2) * 18;
+                const screenX = worldX - offset;
+                const h = 24 + pseudoRandom(i * 4.4) * 20;
+                const trunkH = 5 + pseudoRandom(i * 6.6) * 4;
+                const greenShade = 110 + Math.floor(pseudoRandom(i * 8.8) * 60);
+
+                ctx.fillStyle = '#7a5230';
+                ctx.fillRect(screenX - 2, groundY - trunkH, 4, trunkH);
+
+                ctx.fillStyle = `rgb(30, ${greenShade}, 55)`;
+                for (let t = 0; t < 3; t++) {
+                    const w = (h * 0.5) * (1 - t * 0.22);
+                    const topY = groundY - trunkH - t * (h * 0.28) - h * 0.25;
+                    ctx.beginPath();
+                    ctx.moveTo(screenX, topY - h * 0.32);
+                    ctx.lineTo(screenX - w, topY + h * 0.3);
+                    ctx.lineTo(screenX + w, topY + h * 0.3);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+        }
+
+        // 背景全体をまとめて描画（各レイヤーが異なる速度で動く＝多重スクロール）
+        function drawBackground() {
+            drawSky();
+            drawMountainRange(0.06, 118, 26, 10, 0.003, 0.012, '#b3c6dc');   // 最遠景の山（最も遅い）
+            drawMountainRange(0.12, 132, 34, 16, 0.0045, 0.015, '#8fa6c2'); // 中間の山（やや速い）
+            drawLakes(0.30);   // 湖（中景）
+            drawTrees(0.55);   // 木立（近景、電車より遅いがそれなりに速く動く）
+
+            // 手前の草地（地面のベース）
+            ctx.fillStyle = '#8fc97a';
+            ctx.fillRect(0, 160, canvas.width, canvas.height - 160);
+        }
+
+        // 初期化関数
+        function initSimulation() {
+            trains = [];
+            const startX = 200;
+            
+            // 車両の初期化
+            for (let i = 0; i < numTrains; i++) {
+                trains.push({
+                    x: startX + i * (trainWidth + restLength),
+                    y: canvas.height / 2,
+                    vx: 0,
+                    mass: 1.0, // 均一な質量
+                    id: i + 1
+                });
+            }
+            
+            cameraX = 0;
+            updateRopesConfig();
+        }
+
+        function updateRopesConfig() {
+            ropes = [];
+            const k = parseFloat(document.getElementById('ropeElasticity').value) * 0.1;
+            for (let i = 0; i < numTrains - 1; i++) {
+                ropes.push({
+                    from: i,
+                    to: i + 1,
+                    k: k, // バネ定数
+                    currentLength: restLength
+                });
+            }
+        }
+
+        // コントロール変更検知
+        document.getElementById('motorIndex').addEventListener('change', (e) => {
+            motorIndex = parseInt(e.target.value);
+        });
+        document.getElementById('ropeElasticity').addEventListener('input', updateRopesConfig);
+        document.getElementById('chkWall').addEventListener('change', (e) => {
+            useWall = e.target.checked;
+        });
+        
+        // アクセル操作
+        const pPower = document.getElementById('drivingForce');
+        document.getElementById('btnForward').addEventListener('mousedown', () => { activeForce = parseFloat(pPower.value); });
+        document.getElementById('btnForward').addEventListener('mouseup', () => { activeForce = 0; });
+        document.getElementById('btnForward').addEventListener('mouseleave', () => { activeForce = 0; });
+        
+        document.getElementById('btnBackward').addEventListener('mousedown', () => { activeForce = -parseFloat(pPower.value); });
+        document.getElementById('btnBackward').addEventListener('mouseup', () => { activeForce = 0; });
+        document.getElementById('btnBackward').addEventListener('mouseleave', () => { activeForce = 0; });
+
+        // スマホタッチ対応
+        document.getElementById('btnForward').addEventListener('touchstart', (e) => { e.preventDefault(); activeForce = parseFloat(pPower.value); });
+        document.getElementById('btnForward').addEventListener('touchend', () => { activeForce = 0; });
+        document.getElementById('btnBackward').addEventListener('touchstart', (e) => { e.preventDefault(); activeForce = -parseFloat(pPower.value); });
+        document.getElementById('btnBackward').addEventListener('touchend', () => { activeForce = 0; });
+
+        document.getElementById('btnReset').addEventListener('click', initSimulation);
+
+        // 物理エンジンのアップデート
+        function update() {
+            // 1. 駆動車の移動・外力の追加
+            if (activeForce !== 0) {
+                trains[motorIndex].vx += activeForce;
+            }
+
+            // 2. ひも（バネ・ダンパ）による相互作用力
+            let forces = new Array(numTrains).fill(0);
+            
+            for (let i = 0; i < ropes.length; i++) {
+                const rope = ropes[i];
+                const t1 = trains[rope.from];
+                const t2 = trains[rope.to];
+                
+                // 車両の端点同士の距離
+                const currentDist = t2.x - (t1.x + trainWidth);
+                rope.currentLength = currentDist;
+                
+                const extension = currentDist - restLength;
+                
+                // フックの法則 (F = -k * x) + 速度差による減衰 (ダンパ力)
+                const relVel = t2.vx - t1.vx;
+                const springForce = rope.k * extension + damping * 0.05 * relVel;
+                
+                forces[rope.from] += springForce;
+                forces[rope.to] -= springForce;
+            }
+
+            // 3. 状態更新（位置・速度）
+            for (let i = 0; i < numTrains; i++) {
+                trains[i].vx += forces[i] / trains[i].mass;
+                trains[i].vx *= friction; // 摩擦
+                trains[i].x += trains[i].vx;
+            }
+
+            // 4. 壁衝突判定（行き止まり設定が有効な場合のみ制限）
+            if (useWall) {
+                if (trains[0].x < 20) {
+                    trains[0].x = 20;
+                    trains[0].vx = 0;
+                }
+                if (trains[numTrains - 1].x > canvas.width - trainWidth - 20) {
+                    trains[numTrains - 1].x = canvas.width - trainWidth - 20;
+                    trains[numTrains - 1].vx = 0;
+                }
+            }
+
+            // 5. カメラの追従処理（編成全体の中心、または先頭を画面中央に捉える）
+            let trainCenters = trains.map(t => t.x + trainWidth / 2);
+            let minX = Math.min(...trainCenters);
+            let maxX = Math.max(...trainCenters);
+            let targetCenter = (minX + maxX) / 2;
+            
+            // 壁があるときはカメラを固定（または緩やかに中央へ）、壁なしのときは編成の中心に滑らかに追従
+            if (useWall) {
+                cameraX += (0 - cameraX) * 0.1; // 基準位置に戻る
+            } else {
+                let idealCameraX = targetCenter - canvas.width / 2;
+                cameraX += (idealCameraX - cameraX) * 0.1; // 滑らかな追従 (イージング)
+            }
+        }
+
+        // 描画処理
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 背景（山・湖・木立）を先に描画。電車本体より遅い速度でスクロールさせることで奥行きを表現
+            drawBackground();
+
+            ctx.save();
+            // カメラの平行移動（スクロール）を適用
+            ctx.translate(-cameraX, 0);
+
+            // 地面（線路）の描画（無限に続くように広範囲に描画）
+            ctx.strokeStyle = '#bdc3c7';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(-2000, canvas.height / 2 + trainHeight / 2);
+            ctx.lineTo(5000, canvas.height / 2 + trainHeight / 2);
+            ctx.stroke();
+
+            // 行き止まりの壁を描画（有効な場合のみ）
+            if (useWall) {
+                ctx.fillStyle = '#7f8c8d';
+                // 左側の壁
+                ctx.fillRect(10, canvas.height / 2 - trainHeight - 5, 10, trainHeight * 2 + 10);
+                // 右側の壁
+                ctx.fillRect(canvas.width - 20, canvas.height / 2 - trainHeight - 5, 10, trainHeight * 2 + 10);
+            }
+
+            // 1. ひもの描画
+            for (let i = 0; i < ropes.length; i++) {
+                const rope = ropes[i];
+                const t1 = trains[rope.from];
+                const t2 = trains[rope.to];
+
+                const startX = t1.x + trainWidth;
+                const endX = t2.x;
+                const midY = canvas.height / 2;
+
+                const diff = rope.currentLength - restLength;
+                
+                let color = '#2ecc71'; // 自然長（緑）
+                let thickness = 3;
+                
+                if (diff > 1) { 
+                    const ratio = Math.min(diff / 40, 1);
+                    color = `rgb(${Math.floor(200 + ratio * 55)}, ${Math.floor(100 - ratio * 100)}, ${Math.floor(100 - ratio * 100)})`;
+                    thickness = Math.max(1.5, 4 - ratio * 2); 
+                } else if (diff < -1) { 
+                    const ratio = Math.min(Math.abs(diff) / 30, 1);
+                    color = `rgb(${Math.floor(100 - ratio * 100)}, ${Math.floor(150 + ratio * 50)}, ${Math.floor(200 + ratio * 55)})`;
+                    thickness = 3 + ratio * 4; 
+                }
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = thickness;
+                
+                ctx.beginPath();
+                if (diff < -2) {
+                    ctx.moveTo(startX, midY);
+                    ctx.quadraticCurveTo((startX + endX) / 2, midY + Math.min(Math.abs(diff), 25), endX, midY);
+                } else {
+                    ctx.moveTo(startX, midY);
+                    ctx.lineTo(endX, midY);
+                }
+                ctx.stroke();
+
+                // 数値データの表示
+                ctx.fillStyle = '#7f8c8d';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${diff > 0 ? '+' : ''}${Math.round(diff)}`, (startX + endX) / 2, midY - 15);
+            }
+
+            // 2. 車両の描画
+            for (let i = 0; i < numTrains; i++) {
+                const train = trains[i];
+                const isMotor = (i === motorIndex);
+
+                ctx.fillStyle = isMotor ? '#f1c40f' : '#95a5a6';
+                ctx.strokeStyle = '#2c3e50';
+                ctx.lineWidth = 2;
+                
+                const topY = train.y - trainHeight / 2;
+                
+                ctx.beginPath();
+                ctx.roundRect(train.x, topY, trainWidth, trainHeight, 4);
+                ctx.fill();
+                ctx.stroke();
+
+                // 窓の描画
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(train.x + 8, topY + 6, 10, 8);
+                ctx.fillRect(train.x + 24, topY + 6, 10, 8);
+                ctx.fillRect(train.x + 40, topY + 6, 8, 8);
+
+                // 車輪の描画
+                ctx.fillStyle = '#34495e';
+                ctx.beginPath();
+                ctx.arc(train.x + 12, topY + trainHeight, 5, 0, Math.PI * 2);
+                ctx.arc(train.x + trainWidth - 12, topY + trainHeight, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 車両番号
+                ctx.fillStyle = isMotor ? '#000000' : '#ffffff';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(train.id, train.x + trainWidth / 2, topY + trainHeight / 2 + 4);
+            }
+
+            ctx.restore();
+        }
+
+        // メインループ
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // 開始
+        initSimulation();
+        loop();
+    </script>
+</body>
+</html>
